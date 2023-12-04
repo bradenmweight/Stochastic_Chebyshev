@@ -12,7 +12,7 @@ from Exact import do_H_EXACT
 
 def get_Globals():
     global N, E, MU, WC, A0, A0_SCALED, EGS, E0, SIGE
-    N         = 1_000 # Number of molecules
+    N         = 2 # Number of molecules
     E         = np.zeros( (N,2) )
     MU        = np.zeros( (N,2,2) )
     SIGE      = 0.0
@@ -32,17 +32,18 @@ def get_Globals():
     P[0]     = 0 # GS is not photon.
     P[1:N+1] = np.zeros( (N) ) # Excited matter is not photon.
 
-    global NPTS, EGRID
-    NPTS   = 400 # Number of plotted points
-    EGRID  = np.linspace(0.5,1.5,NPTS) # These are the plotted points
-
     global GAM, N_STOCHASTIC, N_CHEB, dH, EMIN, EMAX
     GAM    = 0.02
-    N_STOCHASTIC = 200
+    N_STOCHASTIC = 100
     N_CHEB       = 250
     EMIN   = -0.2 # Must be lower than smallest eigenvalue
     EMAX   = 1.5 # Must be higher than largest eigenvalue
     dH     = (EMAX-EMIN)
+
+    global NPTS, EGRID
+    NPTS   = 200 # Number of plotted points
+    E01_AVE = np.average( E[:,1] - E[:,0] ) # Average matter excitation
+    EGRID  = np.linspace(E01_AVE-A0-5*GAM-2*SIGE,E01_AVE+A0+5*GAM+2*SIGE,NPTS) # These are the plotted points
 
     global DATA_DIR
     DATA_DIR = "PLOTS_DATA"
@@ -94,7 +95,7 @@ def do_Stochastic_Chebyshev( DOS, c_l, N, EGS, E, pt, MU, WC, A0_SCALED, dH, E0,
 
 
 
-@jit(nopython=True,fastmath=True)
+@jit(nopython=True)
 def get_vec_Tn_vec( N, EGS, E, MU, WC, A0_SCALED, dH, E0, r_vec, M, P, v0, v1 ):
     """
     Returns: <r|T_n(H)|r>
@@ -105,15 +106,12 @@ def get_vec_Tn_vec( N, EGS, E, MU, WC, A0_SCALED, dH, E0, r_vec, M, P, v0, v1 ):
     """
 
     v2 = 2 * get_H_vec_norm( N, EGS, E, MU, WC, A0_SCALED, dH, E0, v1 ) - v0 # Recurssion Relation
+    
+    DOS_T = np.dot( r_vec, v2 )                  # <r| * (T_n(H)|r>)
+    DOS_M = np.dot( M, v2 ) * np.dot( r_vec, M ) # <M| * (T_n(H)|r>) * <r|M>
+    DOS_P = np.dot( P, v2 ) * np.dot( r_vec, P ) # <P| * (T_n(H)|r>) * <r|P>
 
-    # <r| * (T_n(H)|r>)
-    # <M| * (T_n(H)|r>) * <r|M>
-    # <P| * (T_n(H)|r>) * <r|P>
-    RESULTS = np.array([ np.dot( r_vec, v2 ), \
-                         np.dot( M, v2 ) * np.dot( r_vec, M ), \
-                         np.dot( P, v2 ) * np.dot( r_vec, P ) ])
-
-    return v1, v2, RESULTS
+    return v1, v2, np.array([DOS_T,DOS_M,DOS_P])
 
 
 @jit(nopython=True,parallel=True,fastmath=True)
