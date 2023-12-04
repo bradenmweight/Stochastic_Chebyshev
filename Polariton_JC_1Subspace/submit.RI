@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -p standard
+#SBATCH -p action
 #SBATCH -J SRI
 #SBATCH -o output.slurm
 #SBATCH -t 1-00:00:00

@@ -2,7 +2,7 @@ import numpy as np
 
 from Hamiltonian import get_H_nm, get_H_nm_norm
 
-def do_H_EXACT( N, NPTS, EGS, E, MU, WC, A0, EMIN, EMAX, dE, dH, E0, GAM ):
+def do_H_EXACT( N, NPTS, EGS, E, MU, WC, A0, EMIN, EMAX, EGRID, dH, E0, GAM ):
     SIZE = N**2 * 8 * 10**-9
     if ( SIZE > 0.1 ): # in GB
         print("Matrix too large for exact solution. %1.3f GB > 10 GB" % SIZE)
@@ -19,7 +19,6 @@ def do_H_EXACT( N, NPTS, EGS, E, MU, WC, A0, EMIN, EMAX, dE, dH, E0, GAM ):
 
     DOS  = np.zeros( NPTS )
     for pt in range( NPTS ):
-        E       = EMIN + pt*dE
-        DOS[pt] = np.sum( np.exp( -(E - Ei[:])**2 / 2 / GAM**2 ) )
+        DOS[pt] = np.sum( np.exp( -(EGRID[pt] - Ei[:])**2 / 2 / GAM**2 ) )
     #return DOS / GAM / np.sqrt(2 * np.pi)
     return DOS 

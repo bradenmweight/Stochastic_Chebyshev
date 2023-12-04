@@ -1,7 +1,7 @@
 import numpy as np
-from numba import jit
+from numba import jit, prange
 
-@jit(nopython=True)
+@jit(nopython=True,fastmath=True)
 def get_H_nm( N, EGS, E, MU, WC, A0, dH, E0, n, m ):
     """
     N-molecule, Single-mode JC Hamiltonian
@@ -27,7 +27,7 @@ def get_H_nm( N, EGS, E, MU, WC, A0, dH, E0, n, m ):
     else:
         return 0.0
 
-@jit(nopython=True)
+@jit(nopython=True,fastmath=True)
 def get_H_nm_norm( N, EGS, E, MU, WC, A0, dH, E0, n, m ):
     if ( n == m ):
         if ( n == 0 ):
@@ -43,7 +43,7 @@ def get_H_nm_norm( N, EGS, E, MU, WC, A0, dH, E0, n, m ):
     else:
         return 0.0
 
-@jit(nopython=True)
+@jit(nopython=True,fastmath=True)
 def get_H_vec( N, EGS, E, MU, WC, A0, dH, E0 ):
     Hvec        = np.zeros( (N+2) )
     Hvec[0]     = EGS
@@ -51,21 +51,20 @@ def get_H_vec( N, EGS, E, MU, WC, A0, dH, E0 ):
     Hvec[N+1]   = np.sum( WC*A0*MU[:,0,1]*vec[1:N+1] ) + WC*vec[-1]
     return Hvec
 
-@jit(nopython=True)
+@jit(nopython=True,fastmath=True)
 def __get_H_vec_norm( N, EGS, E, MU, WC, A0, dH, E0, vec ):
     Hvec        = np.zeros( (N+2) )
-    Hvec[0]     = (EGS-E0)/dH
-    Hvec[1:N+1] = (EGS - E[:,0] + E[:,1] - E0)*vec[1:N+1]/dH + WC*A0*MU[:,0,1]*vec[-1]/dH
-    Hvec[N+1]   = (WC*A0*np.sum(MU[:,0,1]*vec[1:N+1]) + (EGS+WC-E0)*vec[-1])/dH
-    return Hvec
-
-@jit(nopython=True)
-def get_H_vec_norm( N, EGS, E, MU, WC, A0, dH, E0, vec ):
-    Hvec        = np.zeros( (N+2) )
-    Hvec[0]     = (EGS-E0)
+    Hvec[0]     = (EGS-E0)*vec[0]
     Hvec[1:N+1] = (EGS - E[:,0] + E[:,1] - E0)*vec[1:N+1] + WC*A0*MU[:,0,1]*vec[-1]
     Hvec[N+1]   = WC*A0*np.sum(MU[:,0,1]*vec[1:N+1]) + (EGS+WC-E0)*vec[-1]
     return Hvec/dH
 
 
-
+@jit(nopython=True,fastmath=True)
+def get_H_vec_norm( N, EGS, E, MU, WC, A0, dH, E0, vec ):
+    Hvec        = np.zeros( (N+2) )
+    Hvec[0]     = (EGS-E0)*vec[0]
+    for n in range( 1,N+1 ):
+        Hvec[n] += (EGS - E[n,0] + E[n,1] - E0)*vec[n] + WC*A0*MU[n,0,1]*vec[-1]
+    Hvec[N+1]   = WC*A0*np.sum(MU[:,0,1]*vec[1:N+1]) + (EGS+WC-E0)*vec[-1]
+    return Hvec/dH
