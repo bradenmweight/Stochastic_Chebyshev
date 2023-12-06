@@ -1,18 +1,19 @@
 import numpy as np
 from numba import jit, prange
 
+"""
+N-molecule, Single-mode JC Hamiltonian
+H_PF            = H_el + H_ph + H_el-ph (no RWs)
+<g,g,0|H|g,g,0> = sum(E)
+<e,g,0|H|e,g,0> = <g,g,0|H|g,g,0> - E[0,0] + E[0,1]
+<g,e,0|H|g,e,0> = <g,g,0|H|g,g,0> - E[1,0] + E[1,1]
+<g,g,1|H|g,g,1> = <g,g,0|H|g,g,0> +  wc
+<g,g,1|H|e,g,0> = wc A0 <g,g|mu|e,g>
+<g,g,1|H|g,e,0> = wc A0 <g,g|mu|g,e>
+"""
+
 @jit(nopython=True,fastmath=True)
 def get_H_nm( N, EGS, E, MU, WC, A0, dH, E0, n, m ):
-    """
-    N-molecule, Single-mode JC Hamiltonian
-    H_PF            = H_el + H_ph + H_el-ph (no RWs)
-    <g,g,0|H|g,g,0> = sum(E)
-    <e,g,0|H|e,g,0> = <g,g,0|H|g,g,0> - E[0,0] + E[0,1]
-    <g,e,0|H|g,e,0> = <g,g,0|H|g,g,0> - E[1,0] + E[1,1]
-    <g,g,1|H|g,g,1> = <g,g,0|H|g,g,0> +  wc
-    <g,g,1|H|e,g,0> = wc A0 <g,g|mu|e,g>
-    <g,g,1|H|g,e,0> = wc A0 <g,g|mu|g,e>
-    """
     if ( n == m ):
         if ( n == 0 ):
             return EGS
@@ -46,7 +47,7 @@ def get_H_nm_norm( N, EGS, E, MU, WC, A0, dH, E0, n, m ):
 @jit(nopython=True,fastmath=True)
 def get_H_vec( N, EGS, E, MU, WC, A0, dH, E0 ):
     Hvec        = np.zeros( (N+2) )
-    Hvec[0]     = EGS
+    Hvec[0]     = EGS*vec[0]
     Hvec[1:N+1] = EGS - E[:,0] + E[:,1] + WC*A0*MU[:,0,1]*vec[-1]
     Hvec[N+1]   = np.sum( WC*A0*MU[:,0,1]*vec[1:N+1] ) + WC*vec[-1]
     return Hvec
