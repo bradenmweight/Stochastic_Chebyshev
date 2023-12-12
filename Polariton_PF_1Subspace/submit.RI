@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH -p debug
+#SBATCH -J SRI
+#SBATCH -o output.slurm
+#SBATCH -t 1:00:00
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=12
+#SBATCH --mem 30GB
+
+export OMP_NUM_THREADS=12
+export MKL_NUM_THREADS=1
+
+python3 stochastic_Aggregate.py
+
+
