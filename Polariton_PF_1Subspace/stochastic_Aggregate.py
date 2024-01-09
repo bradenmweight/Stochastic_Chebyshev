@@ -5,36 +5,39 @@ import subprocess as sp
 from time import time
 import multiprocessing as mp
 import random
+import sys
 
-from Hamiltonian import get_H_vec_norm, get_GS_DSE, get_DIAG_DSE, get_0n_DSE
+from Hamiltonian import get_H_vec_norm, get_H_vec_norm_SLOW, get_H_vec_norm_TRANSITION, get_GS_DSE, get_DIAG_DSE, get_0n_DSE
 from Exact import do_H_EXACT
 
 
 def get_Globals():
 
     global PARALLEL_FLAG, NCPUS
-    PARALLEL_FLAG = False
-    NCPUS         = 1
+    PARALLEL_FLAG = True
+    NCPUS         = 12
 
-    global N, E, MU, WC, A0, A0_SCALED, EGS, E0, SIGE, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n
-    N         = 1 # Number of molecules
+    global N, E, MU, WC, A0, A0_SCALED, EGS, E0, SIGE, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n
+    N         = int(sys.argv[1]) # Number of molecules
     WC        = 1.0
-    A0        = 0.6
+    A0        = float(sys.argv[2])
     E         = np.zeros( (N,2) )
     MU        = np.zeros( (N,2,2) )
     SIGE      = 0.0
     E[:,1]    = 1.0 + np.random.normal( 0.0, SIGE, size=N )
     MU[:,0,1] = np.ones( (N) )
-    MU[:,0,0] = np.ones( (N) )/10
-    MU[:,1,1] = np.ones( (N) )/10
-    DSE_AA    = WC * A0**2 * np.einsum( "Ajk,Akl->Ajl", MU, MU )
-    DSE_GS    = get_GS_DSE( A0, WC, MU, DSE_AA )
-    DSE_DIAG  = get_DIAG_DSE( A0, WC, MU, DSE_GS, DSE_AA )
-    DSE_0n    = get_0n_DSE( A0, WC, MU, DSE_GS, DSE_AA )
+    MU[:,0,0] = np.ones( (N) )/100
+    MU[:,1,1] = np.ones( (N) )/100
 
     A0_SCALED = A0 / np.sqrt(N)
     EGS       = np.sum(E[:,0])
     E0        = 0.0 # CODE ONLY WORKS WHEN CENTER IS 0.0
+
+    # Pre-compute some important quantities
+    MU2_AA    = np.einsum( "Ajk,Akl->Ajl", MU, MU )
+    DSE_GS    = get_GS_DSE( A0_SCALED, WC, MU, MU2_AA )
+    DSE_DIAG  = get_DIAG_DSE( A0_SCALED, WC, MU, DSE_GS, MU2_AA )
+    DSE_0n    = get_0n_DSE( A0_SCALED, WC, MU, DSE_GS, MU2_AA )
 
     global M, P # Matter and Photon projectors
     M        = np.ones( (N+2) )
@@ -46,16 +49,17 @@ def get_Globals():
 
     global GAM, N_STOCHASTIC, N_CHEB, dH, EMIN, EMAX
     GAM    = 0.02
-    N_STOCHASTIC = 100
+    N_STOCHASTIC = 200
     N_CHEB       = 300
     EMIN   = -0.2 # Must be lower than smallest eigenvalue
-    EMAX   = 1.5 # Must be higher than largest eigenvalue
+    EMAX   =  1.8 # Must be higher than largest eigenvalue
     dH     = (EMAX-EMIN)
 
     global NPTS, EGRID
-    NPTS   = 200 # Number of plotted points
-    E01_AVE = np.average( E[:,1] - E[:,0] ) # Average matter excitation
-    EGRID  = np.linspace(E01_AVE-A0-5*GAM-2*SIGE,E01_AVE+A0+5*GAM+2*SIGE,NPTS) # These are the plotted points
+    NPTS    = 1000 # Number of plotted points
+    #E01_AVE = np.average( E[:,1] - E[:,0] ) # Average matter excitation
+    #EGRID   = np.linspace(E01_AVE-A0-5*GAM-2*SIGE,E01_AVE+A0+5*GAM+2*SIGE,NPTS) # These are the plotted points
+    EGRID   = np.linspace(-0.2,2.0,NPTS) # These are the plotted points
 
     global DATA_DIR
     DATA_DIR = "PLOTS_DATA"
@@ -74,7 +78,7 @@ def do_STOCHASTIC_DOS():
         c_l = get_coeffs( EGRID[pt], E0, N_CHEB, c_l ).real # TODO IF WE ADD COMPLEX HAMILTONIAN, WE NEED TO CHANGE THIS
         print("Time to get coefficients: %1.3f s" % (time() - T0))
         T0 = time()
-        DOS[pt,:] = do_Stochastic_Chebyshev( DOS[pt,:], c_l, N, EGS, E, pt, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, M, P )
+        DOS[pt,:] = do_Stochastic_Chebyshev( DOS[pt,:], c_l, N, EGS, E, pt, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, M, P )
         print("Stochastic Time: %1.3f s" % (time() - T0) )
 
 
@@ -97,59 +101,57 @@ def do_STOCHASTIC_DOS_PARALLEL( pt ):
     c_l = get_coeffs( EGRID[pt], E0, N_CHEB, c_l ).real # TODO IF WE ADD COMPLEX HAMILTONIAN, WE NEED TO CHANGE THIS
     print("Time to get coefficients: %1.3f s" % (time() - T0))
     T0 = time()
-    DOS = do_Stochastic_Chebyshev( DOS, c_l, N, EGS, E, pt, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, M, P )
+    DOS = do_Stochastic_Chebyshev( DOS, c_l, N, EGS, E, pt, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, M, P )
     print("Stochastic Time: %1.3f s" % (time() - T0) )
-
-    print( pt, DOS )
 
     return DOS
 
 
 @jit(nopython=True)
-def do_Stochastic_Chebyshev( DOS, c_l, N, EGS, E, pt, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, M, P ):
+def do_Stochastic_Chebyshev( DOS, c_l, N, EGS, E, pt, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, M, P ):
     for _ in range( N_STOCHASTIC ):
+        #print( "r", _ )
         r_vec = np.array([ random.randint(0,1)*2.-1. for n in range(N+2) ]) # np.random.randint(0,high=2,size=N+2)*2. - 1
-        v0, v1, DOS = get_T0_T1_vec( DOS, pt, c_l, N, EGS, E, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P )
+        v0, v1, DOS = get_T0_T1_vec( DOS, pt, c_l, N, EGS, E, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P )
         for l in range( 2, N_CHEB ):
-            v0, v1, RN = get_vec_Tn_vec( N, EGS, E, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P, v0, v1 )
+            v0, v1, RN = get_vec_Tn_vec( N, EGS, E, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P, v0, v1 )
             DOS += c_l[l] * RN[:]
     return DOS
 
 
 @jit(nopython=True,fastmath=True)
-def get_T0_T1_vec( DOS, pt, c_l, N, EGS, E, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P ):
+def get_T0_T1_vec( DOS, pt, c_l, N, EGS, E, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P ):
     v0 = r_vec
-    v1 = get_H_vec_norm( N, EGS, E, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec )
-    DOS[0] += c_l[0] * np.dot( r_vec, r_vec )                  # <r|r>
-    # DOS[pt,1] += c_l[0] * np.dot( M, r_vec ) * np.dot( r_vec, M ) # <M|r> * <r|M>
-    # DOS[pt,2] += c_l[0] * np.dot( P, r_vec ) * np.dot( r_vec, P ) # <P|r> * <r|P>
+    v1 = get_H_vec_norm( N, EGS, E, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec )
+    DOS[0] += c_l[0] * np.dot( r_vec, r_vec )          # <r|r>
     DOS[1] += c_l[0] * np.dot( M * r_vec , r_vec * M ) # <M|r> * <r|M>
     DOS[2] += c_l[0] * np.dot( P * r_vec , r_vec * P ) # <P|r> * <r|P>
-    DOS[0] += c_l[1] * np.dot( r_vec, v1 )                     # <r|T_1(H)|r>
-    # DOS[pt,1] += c_l[1] * np.dot( M, v1 ) * np.dot( r_vec, M )    # <M|T_1(H)|r> * <r|M>
-    # DOS[pt,2] += c_l[1] * np.dot( P, v1 ) * np.dot( r_vec, P )    # <P|T_1(H)|r> * <r|P>
+    DOS[0] += c_l[1] * np.dot( r_vec, v1 )             # <r|T_1(H)|r>
     DOS[1] += c_l[1] * np.dot( M * v1 , r_vec * M )    # <M|T_1(H)|r> * <r|M>
     DOS[2] += c_l[1] * np.dot( P * v1 , r_vec * P )    # <P|T_1(H)|r> * <r|P>
     return v0, v1, DOS
 
 @jit(nopython=True)
-def get_vec_Tn_vec( N, EGS, E, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P, v0, v1 ):
+def get_vec_Tn_vec( N, EGS, E, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, r_vec, M, P, v0, v1 ):
     """
-    Returns: <r|T_n(H)|r>
+    Returns: <r|T_n(H)|r_n>
     Chebyshev Recurssion Relations:
     |v_0>   = |r>
     |v_1>   = H|v_0>
+    \\vdots
     |v_n+1> = 2H|v_n> - |v_n-1>
     """
 
-    v2 = 2 * get_H_vec_norm( N, EGS, E, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, v1 ) - v0 # Recurssion Relation
-    
-    R_T = np.dot( r_vec, v2 )                  # <r| * (T_n(H)|r>)
-    #R_M = np.dot( M, v2 ) * np.dot( r_vec, M ) # <M| * (T_n(H)|r>) * <r|M>
-    #R_P = np.dot( P, v2 ) * np.dot( r_vec, P ) # <P| * (T_n(H)|r>) * <r|P>
+    #T0 = time()
+    TMP = get_H_vec_norm( N, EGS, E, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, dH, E0, v1 )
+    v2  = 2 * TMP - v0 # Recurssion Relation
+    #print("Time (H @ vec):", time() - T0)
 
+    #T0 = time()
+    R_T = np.dot( r_vec, v2 )          # <r| * (T_n(H)|r>)
     R_M = np.dot( M * v2 , r_vec * M ) # <M| * (T_n(H)|r>) * <r|M>
     R_P = np.dot( P * v2 , r_vec * P ) # <P| * (T_n(H)|r>) * <r|P>
+    #print("Time (Projection):", time() - T0)
 
     return v1, v2, np.array([R_T,R_M,R_P])
 
@@ -175,6 +177,7 @@ def plot_DOS( EXACT, STOCHASTIC ):
     if ( EXACT is not None ):
         plt.plot( EGRID, EXACT / np.max(EXACT), "-", c="black", label="EXACT" )
         #plt.plot( EGRID, EXACT, "-", c="black", label="EXACT" )
+        np.savetxt("%s/DOS_TOTAL_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_WC_%1.3f_SIG_%1.3f_EXACT.dat" % (DATA_DIR,N,N_STOCHASTIC,N_CHEB,GAM,A0,WC,SIGE), np.c_[EGRID, EXACT / np.max(EXACT)])
     plt.legend()
     plt.xlabel("Energy (a.u.)", fontsize=15)
     plt.ylabel("Density of States (Arb. Units)", fontsize=15)
@@ -186,6 +189,7 @@ def plot_DOS( EXACT, STOCHASTIC ):
     plt.tight_layout()
     plt.savefig("%s/DOS_TOTAL_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_WC_%1.3f_SIG_%1.3f.jpg" % (DATA_DIR,N,N_STOCHASTIC,N_CHEB,GAM,A0,WC,SIGE), dpi=300)
     plt.clf()
+    np.savetxt("%s/DOS_TOTAL_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_WC_%1.3f_SIG_%1.3f.dat" % (DATA_DIR,N,N_STOCHASTIC,N_CHEB,GAM,A0,WC,SIGE), np.c_[EGRID, STOCHASTIC[:,0] / np.max(STOCHASTIC[:,0])])
 
     ### MATTER-PROJECTED DOS ###
     plt.plot( EGRID, STOCHASTIC[:,1] / np.max(STOCHASTIC[:,1]), "o", c="red", label="STOCHASTIC" )
@@ -201,6 +205,7 @@ def plot_DOS( EXACT, STOCHASTIC ):
     plt.tight_layout()
     plt.savefig("%s/DOS_MATTER_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_WC_%1.3f_SIG_%1.3f.jpg" % (DATA_DIR,N,N_STOCHASTIC,N_CHEB,GAM,A0,WC,SIGE), dpi=300)
     plt.clf()
+    np.savetxt("%s/DOS_MATTER_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_WC_%1.3f_SIG_%1.3f.dat" % (DATA_DIR,N,N_STOCHASTIC,N_CHEB,GAM,A0,WC,SIGE), np.c_[EGRID, STOCHASTIC[:,1] / np.max(STOCHASTIC[:,1])])
 
 
     ### PHOTON-PROJECTED DOS ###
@@ -217,10 +222,12 @@ def plot_DOS( EXACT, STOCHASTIC ):
     plt.tight_layout()
     plt.savefig("%s/DOS_PHOTON_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_WC_%1.3f_SIG_%1.3f.jpg" % (DATA_DIR,N,N_STOCHASTIC,N_CHEB,GAM,A0,WC,SIGE), dpi=300)
     plt.clf()
+    np.savetxt("%s/DOS_PHOTON_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_WC_%1.3f_SIG_%1.3f.dat" % (DATA_DIR,N,N_STOCHASTIC,N_CHEB,GAM,A0,WC,SIGE), np.c_[EGRID, STOCHASTIC[:,2] / np.max(STOCHASTIC[:,2])])
+
 
 def main():
     get_Globals()
-    DOS_EXACT      = do_H_EXACT( N, NPTS, EGS, E, MU, DSE_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, EMIN, EMAX, EGRID, dH, E0, GAM )
+    DOS_EXACT      = do_H_EXACT( N, NPTS, EGS, E, MU, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n, WC, A0_SCALED, EMIN, EMAX, EGRID, dH, E0, GAM )
     
     T0 = time()
     if ( PARALLEL_FLAG == False ):
