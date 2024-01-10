@@ -19,7 +19,7 @@ def get_Globals():
 
     global N, E, MU, WC, A0, A0_SCALED, EGS, E0, SIGE, MU2_AA, DSE_GS, DSE_DIAG, DSE_0n
     N         = int(sys.argv[1]) # Number of molecules
-    WC        = 1.0
+    WC        = float(sys.argv[3])
     A0        = float(sys.argv[2])
     E         = np.zeros( (N,2) )
     MU        = np.zeros( (N,2,2) )
