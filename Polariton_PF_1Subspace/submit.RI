@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH -p debug
+#SBATCH -p exciton -A exciton
 #SBATCH -J Stochastic
 #SBATCH -o output.slurm
-#SBATCH -t 1:00:00
+#SBATCH -t 1-00:00:00
 #SBATCH -N 1
 #SBATCH --ntasks-per-node=12
 #SBATCH --mem 30GB
@@ -12,6 +12,7 @@ export MKL_NUM_THREADS=1
 
 NMOL=$1
 A0=$2
+WC=$3
 
-python3 stochastic_Aggregate.py ${NMOL} ${A0}
+python3 stochastic_Aggregate.py ${NMOL} ${A0} ${WC}
 
