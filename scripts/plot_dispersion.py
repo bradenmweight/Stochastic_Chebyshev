@@ -6,8 +6,8 @@ N        = 1000
 NPTS     = 100
 NR       = 200
 NC       = 300
-SIGE     = 0.0
-SIGG     = 1.0
+SIGE     = 0.2
+SIGG     = 0.0
 CAVLOSS  = 0.0
 GAM      = 0.05
 A0_LIST  = [0.1, 0.2]
@@ -46,6 +46,9 @@ for A0i,A0 in enumerate( A0_LIST ):
     plt.title("$A_0$ = %1.2f a.u.  $N$ = %1.0f  $\sigma_\mathrm{E}$ = %1.1f a.u.  $\sigma_\mathrm{G}$ = %1.1f a.u." % (A0,N,SIGE,SIGG), fontsize=15)
     plt.tight_layout()
     plt.savefig("PLOTS_DATA/Dispersion_PHOTON_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f.jpg" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), dpi=300 )
+    np.savetxt("PLOTS_DATA/Dispersion_PHOTON_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f.dat" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), F(WC_FINE,EGRID_FINE) / np.max(F(WC_FINE,EGRID_FINE)), fmt="%1.4f", header="WC_GRID (1001 PTS), E_GRID (1000 PTS)" )
+    np.savetxt("PLOTS_DATA/Dispersion_PHOTON_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f_WCGRID.dat" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), WC_FINE, fmt="%1.4f" )
+    np.savetxt("PLOTS_DATA/Dispersion_PHOTON_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f_EGRID.dat" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), EGRID_FINE, fmt="%1.4f" )
     plt.clf()
 
 ###### MATTER ######
@@ -61,4 +64,7 @@ for A0i,A0 in enumerate( A0_LIST ):
     plt.title("$A_0$ = %1.2f a.u.  $N$ = %1.0f  $\sigma_\mathrm{E}$ = %1.1f a.u.  $\sigma_\mathrm{G}$ = %1.1f a.u." % (A0,N,SIGE,SIGG), fontsize=15)
     plt.tight_layout()
     plt.savefig("PLOTS_DATA/Dispersion_MATTER_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f.jpg" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), dpi=300 )
+    np.savetxt("PLOTS_DATA/Dispersion_MATTER_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f.dat" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), F(WC_FINE,EGRID_FINE) / np.max(F(WC_FINE,EGRID_FINE)), fmt="%1.4f", header="WC_GRID (1001 PTS), E_GRID (1000 PTS)" )
+    np.savetxt("PLOTS_DATA/Dispersion_MATTER_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f_WCGRID.dat" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), WC_FINE, fmt="%1.4f" )
+    np.savetxt("PLOTS_DATA/Dispersion_MATTER_N_%1.0f_Nr_%1.0f_NC_%1.0f_GAM_%1.3f_A0_%1.3f_SIGE_%1.3f_SIGG_%1.3f_CAVLOSS_%1.3f_EGRID.dat" % (N,NR,NC,GAM,A0,SIGE,SIGG,CAVLOSS), EGRID_FINE, fmt="%1.4f" )
     plt.clf()
