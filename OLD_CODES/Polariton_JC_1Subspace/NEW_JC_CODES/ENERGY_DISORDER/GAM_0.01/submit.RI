@@ -1,0 +1,22 @@
+#!/bin/bash
+#SBATCH -p action
+#SBATCH -J 10000
+#SBATCH -o output.slurm
+#SBATCH -t 5-00:00:00
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem 10GB
+#SBATCH -x bhd0005
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
+NMOL=$1
+A0=$2
+WC=$3
+CL=$4
+SIGE=$5
+SIGG=$6
+python3 stochastic_Aggregate_Parallel.py ${NMOL} ${A0} ${WC} ${CL} ${SIGE} ${SIGG}
+
+

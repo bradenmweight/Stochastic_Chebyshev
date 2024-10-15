@@ -1,0 +1,19 @@
+#!/bin/bash
+#SBATCH -p action
+#SBATCH -J Stochastic
+#SBATCH -o output.slurm
+#SBATCH -t 5-00:00:00
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem 1GB
+
+export OMP_NUM_THREADS=1
+export MKL_NUM_THREADS=1
+
+NMOL=$1
+A0=$2
+WC=$3
+ERxN=$4
+
+python3 stochastic_Aggregate.py ${NMOL} ${A0} ${WC} ${ERxN}
+

@@ -1,0 +1,15 @@
+#!/bin/bash
+#SBATCH -p action
+#SBATCH -J CHEB
+#SBATCH -o output.slurm
+#SBATCH -t 1-00:00:00
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=24
+#SBATCH --mem 58GB
+
+export OMP_NUM_THREADS=24
+export MKL_NUM_THREADS=24
+
+python3 Loss.py
+
+
