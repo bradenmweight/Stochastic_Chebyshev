@@ -12,9 +12,9 @@ def build_Exact(params):
 
     if ( params.HAM == "JC" ):
         H[mol_diag_inds]  = params.E_MOL
-        H[phot_diag_inds] = params.WC - 1j * 0.5  * params.CAV_LOSS
-        H[Coupling_inds1] = params.WC * params.A0 * params.MU_MOL
-        H[Coupling_inds2] = params.WC * params.A0 * params.MU_MOL
+        H[phot_diag_inds] = params.WC - 1j * 0.5  * params.CAV_LOSS if ( params.CAV_LOSS_TYPE == "non-hermitian" ) else params.WC
+        H[Coupling_inds1] = params.MU_MOL_SCALED
+        H[Coupling_inds2] = params.MU_MOL_SCALED
     return H
 
 @njit
@@ -32,11 +32,12 @@ def H_JC_on_vec( Hvec, vec, N_MOL, E_MOL_SHIFTED, MU_MOL_SCALED, WC_SHIFTED, dH 
 
     return Hvec/dH
 
-@njit
+#@njit
 def H_JC_on_vec_batch( Hvec, vec, N_MOL, E_MOL_SHIFTED, MU_MOL_SCALED, WC_SHIFTED, dH ):
 
     # DIAGONAL ELEMENTS
-    Hvec[:N_MOL,:] += E_MOL_SHIFTED[:,None] * vec[:N_MOL,:]
+    #Hvec[:N_MOL,:] += E_MOL_SHIFTED[:,None] * vec[:N_MOL,:] # For stationary E_MOL
+    Hvec[:N_MOL,:] += E_MOL_SHIFTED[:,:] * vec[:N_MOL,:] # For stochatically sampled E_MOL
     
     # LAST COLUMN
     Hvec[:N_MOL,:] += np.outer(MU_MOL_SCALED[:], vec[-1,:] )

@@ -24,27 +24,46 @@ def get_random_vector_real(shape):
     r_vec = np.array([ random() for _ in range(myprod(shape)) ])
     return r_vec.reshape(shape).astype(np.complex128) * 2 - 1 # r \in [-1,1)
 
+# @njit
+# def _sample( MEAN, WIDTH, MIN, MAX, P_type ):
+#     count = 0
+#     while ( True ):
+#         if ( P_type.lower() == "gaussian" ):
+#             rand = gauss(MEAN, WIDTH)
+#         elif ( P_type.lower() == "lorentzian" ):
+#             rand = MEAN + WIDTH * np.random.standard_cauchy()
+#         else:
+#             print("Error: Unknown probability type")
+#             return None
+
+#         if ( rand > MIN and rand < MAX ):
+#             return rand
+#         count += 1
+
 @njit
 def _sample( MEAN, WIDTH, MIN, MAX, P_type ):
     count = 0
-    while ( True ):
-        if ( P_type.lower() == "gaussian" ):
-            rand = gauss(MEAN, WIDTH)
-        elif ( P_type.lower() == "lorentzian" ):
-            rand = MEAN + WIDTH * np.random.standard_cauchy()
-        else:
-            print("Error: Unknown probability type")
-            return None
+    if ( P_type.lower() == "gaussian" ):
+        rand = gauss(MEAN, WIDTH)
+    elif ( P_type.lower() == "lorentzian" ):
+        rand = MEAN + WIDTH * np.random.standard_cauchy()
+    else:
+        print("Error: Unknown probability type")
+        return None
 
-        if ( rand > MIN and rand < MAX ):
-            return rand
-        count += 1
-    
+    if ( rand < MIN ):
+        return MIN + 1e-5
+    elif ( rand > MAX ):
+        return MAX - 1e-5
+    else:
+        return rand
+
+
 @njit
 def _sample_random_frequency( WC, E0, CAV_LOSS, dH, batch_size, P_type ):
     TMP = np.zeros( batch_size, dtype=np.complex128 )
     for i in range(batch_size):
-        TMP[i] = _sample( WC - E0, CAV_LOSS, -dH/2, dH/2, P_type )
+        TMP[i] = _sample( WC - E0, 0.500 * CAV_LOSS, -dH/2, dH/2, P_type ) # 0.500 here
     return TMP
 
 class Params():
@@ -78,7 +97,6 @@ class Params():
 
         self._build()
 
-
     def _build(self):
 
         if ( self.HAM == "JC" ):
@@ -87,14 +105,14 @@ class Params():
             self.PHOTON_PROJ = ( np.arange( self.N_MOL, self.DIM_H ) ) # Photon indices
 
             if ( self.MOL_DISORDER == 'gaussian' ):
-                self.E_MOL = np.random.normal( loc=self.E0, scale=self.SIG_E, size=self.N_MOL )
+                self.E_MOL = np.random.normal( loc=self.E0, scale=0.500*self.SIG_E, size=self.N_MOL )
             elif ( self.MOL_DISORDER == 'lorentzian' ):
-                self.E_MOL = self.E0 + self.SIG_E * np.random.standard_cauchy( size=self.N_MOL )
+                self.E_MOL = self.E0 + 0.500*self.SIG_E * np.random.standard_cauchy( size=self.N_MOL )
             elif ( self.MOL_DISORDER == 'rectangular' ):
-                self.E_MOL = np.random.uniform( self.E0-self.SIG_E, self.E0+self.SIG_E, size=self.N_MOL )
+                self.E_MOL = np.random.uniform( self.E0-0.500*self.SIG_E, self.E0+0.500*self.SIG_E, size=self.N_MOL )
             self.E_MOL         = self.E_MOL.astype(dtype=np.complex128)
-            self.E_MOL_SHIFT   = self.E_MOL - self.E0
-            self.MU_MOL        = np.ones( (self.N_MOL), dtype=np.complex128 )
+            self.E_MOL_SHIFTED = self.E_MOL - self.E0
+            self.MU_MOL        = np.ones( self.N_MOL, dtype=np.complex128 )
             self.MU_MOL_SCALED = self.WC * self.A0 * self.MU_MOL
             
         self.theta = np.linspace(0,2*np.pi,2000, dtype=np.complex128)
@@ -102,29 +120,36 @@ class Params():
         self.c_l   = np.zeros(self.N_CHEB, dtype=np.complex128)
         self.DOS   = np.zeros(3, dtype=np.complex128)
 
-        self.Hvec  = np.zeros(self.DIM_H, dtype=np.complex128)
-        self.r_vec = np.zeros(self.DIM_H, dtype=np.complex128)
-        self.v0    = np.zeros(self.DIM_H, dtype=np.complex128)
-        self.v1    = np.zeros(self.DIM_H, dtype=np.complex128)
-        self.v2    = np.zeros(self.DIM_H, dtype=np.complex128)
+        if ( self.batch_size == -1 ):
+            self.Hvec  = np.zeros(self.DIM_H, dtype=np.complex128)
+            self.r_vec = np.zeros(self.DIM_H, dtype=np.complex128)
+            self.v0    = np.zeros(self.DIM_H, dtype=np.complex128)
+            self.v1    = np.zeros(self.DIM_H, dtype=np.complex128)
+            self.v2    = np.zeros(self.DIM_H, dtype=np.complex128)
+        else:
+            self.Hvec  = np.zeros( (self.DIM_H, self.batch_size), dtype=np.complex128 )
+            self.r_vec = np.zeros( (self.DIM_H, self.batch_size), dtype=np.complex128 )
+            self.v0    = np.zeros( (self.DIM_H, self.batch_size), dtype=np.complex128 )
+            self.v1    = np.zeros( (self.DIM_H, self.batch_size), dtype=np.complex128 )
+            self.v2    = np.zeros( (self.DIM_H, self.batch_size), dtype=np.complex128 )
 
     def get_current_WC(self):
         if ( self.CAV_LOSS_TYPE == "stochastic" ):
             return _sample_random_frequency( self.WC, self.E0, self.CAV_LOSS, self.dH, self.batch_size, self.P_type )
         elif ( self.CAV_LOSS_TYPE == "non-hermitian" ):
-            return self.WC - 1j * 0.5 * self.CAV_LOSS - self.E0
+            return (self.WC - self.E0) - 1j * 0.500 * self.CAV_LOSS
 
     def evaluate_DOS_initial(self, c0, c1):
-        TOTAL   = c0 * get_Inner_Product_batch( self.r_vec[:,:],                self.v0[:,:]           )
+        TOTAL   = c0 * get_Inner_Product_batch( self.r_vec[:,:],                self.v0[:,:]                )
         MATTER  = c0 * get_Inner_Product_batch( self.r_vec[self.MATTER_PROJ,:], self.v0[self.MATTER_PROJ,:] )
         PHOTON  = c0 * get_Inner_Product_batch( self.r_vec[self.PHOTON_PROJ,:], self.v0[self.PHOTON_PROJ,:] )
-        TOTAL  += c1 * get_Inner_Product_batch( self.r_vec[:,:],                self.v1[:,:]           )
+        TOTAL  += c1 * get_Inner_Product_batch( self.r_vec[:,:],                self.v1[:,:]                )
         MATTER += c1 * get_Inner_Product_batch( self.r_vec[self.MATTER_PROJ,:], self.v1[self.MATTER_PROJ,:] )
         PHOTON += c1 * get_Inner_Product_batch( self.r_vec[self.PHOTON_PROJ,:], self.v1[self.PHOTON_PROJ,:] )
         return np.array([TOTAL, MATTER, PHOTON])
 
-    def evaluate_DOS(self, c):
-        TOTAL   = c * get_Inner_Product_batch( self.r_vec[:,:],                self.v2[:,:]           )
+    def evaluate_DOS( self, c ):
+        TOTAL   = c * get_Inner_Product_batch( self.r_vec[:,:],                self.v2[:,:]                )
         MATTER  = c * get_Inner_Product_batch( self.r_vec[self.MATTER_PROJ,:], self.v2[self.MATTER_PROJ,:] )
         PHOTON  = c * get_Inner_Product_batch( self.r_vec[self.PHOTON_PROJ,:], self.v2[self.PHOTON_PROJ,:] )
         return np.array([TOTAL, MATTER, PHOTON])
@@ -165,11 +190,11 @@ class Params():
             self.r_vec[:]  = get_random_vector_complex(self.DIM_H)
             if ( self.CAV_LOSS_TYPE == "stochastic" ): self.WC_SHIFTED = get_random_cavity_frequency( self.WC, self.CAV_LOSS )
             self.v0[:]     = self.r_vec[:]
-            self.v1[:]     = H_JC_on_vec( self.Hvec*0, self.v0, self.N_MOL, self.E_MOL_SHIFT, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH )
+            self.v1[:]     = H_JC_on_vec( self.Hvec*0, self.v0, self.N_MOL, self.E_MOL_SHIFTED, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH )
             self.DOS[-1]  += get_DOS_PHOTON( coeffs[0], self.r_vec[self.PHOTON_PROJ], self.v0[self.PHOTON_PROJ] )
             self.DOS[-1]  += get_DOS_PHOTON( coeffs[1], self.r_vec[self.PHOTON_PROJ], self.v1[self.PHOTON_PROJ] )
             for n in range( 2, self.N_CHEB ):
-                self.v2[:]     = 2 * H_JC_on_vec( self.Hvec*0, self.v1, self.N_MOL, self.E_MOL_SHIFT, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH ) - self.v0
+                self.v2[:]     = 2 * H_JC_on_vec( self.Hvec*0, self.v1, self.N_MOL, self.E_MOL_SHIFTED, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH ) - self.v0
                 self.DOS[-1]  += get_DOS_PHOTON( coeffs[n], self.r_vec, self.v2 )
                 self.v0[:]     = self.v1[:] * 1
                 self.v1[:]     = self.v2[:] * 1
@@ -181,19 +206,20 @@ class Params():
         for batchi in range( self.nbatch ):
             #print("\tWorking on batch %d of %d" % (batchi, self.nbatch) )
             DOS_TMP          = np.zeros( (3, self.batch_size), dtype=np.complex128 )
-            #self.r_vec       = get_random_vector_complex( (self.DIM_H, self.batch_size) )
-            self.r_vec       = get_random_vector_real( (self.DIM_H, self.batch_size) )
+            #self.r_vec[:,:]  = get_random_vector_complex( (self.DIM_H, self.batch_size) )
+            self.r_vec[:,:]  = get_random_vector_real( (self.DIM_H, self.batch_size) )
             self.WC_SHIFTED  = self.get_current_WC()
-            self.v0          = self.r_vec[:,:] * 1
-            self.v1          = H_JC_on_vec_batch( self.Hvec*0, self.v0, self.N_MOL, self.E_MOL_SHIFT, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH )
+            if ( abs(np.min(self.WC_SHIFTED) - 0.5*self.dH ) < 1e-3 or abs(np.max(self.WC_SHIFTED) - 0.5*self.dH ) < 1e-3 ):
+                print( "MIN: %1.3f AVE: %1.3f STD %1.3f MAX %1.3f" % (np.min(self.WC_SHIFTED), np.average(self.WC_SHIFTED), np.std(self.WC_SHIFTED), np.max(self.WC_SHIFTED)) )
+            self.v0[:,:]     = self.r_vec[:,:] * 1
+            self.v1[:,:]     = H_JC_on_vec_batch( self.Hvec*0, self.v0, self.N_MOL, self.E_MOL_SHIFTED, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH )
             DOS_TMP         += self.evaluate_DOS_initial( coeffs[0], coeffs[1] )
-
             for n in range( 2, self.N_CHEB ):
-                self.v2          = 2 * H_JC_on_vec_batch( self.Hvec*0, self.v1, self.N_MOL, self.E_MOL_SHIFT, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH ) - self.v0
+                self.v2[:,:]     = 2 * H_JC_on_vec_batch( self.Hvec*0, self.v1, self.N_MOL, self.E_MOL_SHIFTED, self.MU_MOL_SCALED, self.WC_SHIFTED, self.dH ) - self.v0
                 DOS_TMP         += self.evaluate_DOS( coeffs[n] )
                 self.v0[:,:]     = self.v1[:,:] * 1
                 self.v1[:,:]     = self.v2[:,:] * 1
-            self.DOS += np.einsum("aR->a", DOS_TMP[:,:])
+            self.DOS += np.sum(DOS_TMP[:,:],axis=1) # Sum over random vectors
         self.DOS = self.DOS / self.N_STOCHASTIC
 
     def run(self):

@@ -1,23 +1,33 @@
 import numpy as np
 from matplotlib import pyplot as plt
 import sys
+import subprocess as sp
+
+DATA_DIR = "data/"
+sp.call(f"mkdir -p {DATA_DIR}", shell=True)
 
 color_list = ["black", "red", "blue", "green", "orange", "purple", "cyan", "magenta"]
 
 sys.path.insert(0, '../../../')
 from main import Params
 
-A0        = 0.10
-WC        = 1.00 # Cavity Average Transition Energy
+A0        = 0.05
+WC        = 1.0 # Cavity Average Transition Energy
 E0        = 1.0 # Molecular Average Transition Energy
-LOSS_LIST = [0.0, 0.1, 0.2, 0.4, 0.8]
+LOSS_LIST = [0.0, 0.05, 0.1, 0.2, 0.4]
+
+N_CHEB = 1000
+GAM    = 0.01
 
 N_MOL = 1
-EMIN  = 0.5 #np.min([WC,E0])-0.5
-EMAX  = 1.5 #np.max([WC,E0])+0.5
-dH    = EMAX - EMIN
+EMIN  = E0 - 2*A0*np.sqrt(N_MOL)
+EMAX  = E0 + 2*A0*np.sqrt(N_MOL)
+dH    = 2.0 # EMAX - EMIN
 EGRID = np.linspace( EMIN, EMAX, 200 )
 dE    = EGRID[1] - EGRID[0]
+
+DOS_CHEB  = np.zeros( ( len(LOSS_LIST), len(EGRID), 3 ), dtype=np.complex128)
+DOS_EXACT = np.zeros( ( len(LOSS_LIST), len(EGRID), 3 ), dtype=np.complex128)
 
 for CAVi,CAV in enumerate( LOSS_LIST ):
     print( "Working on cavity loss rate: %1.3f a.u." % CAV )
@@ -25,62 +35,47 @@ for CAVi,CAV in enumerate( LOSS_LIST ):
     print( "dH = %1.3f" % dH )
     print( "dE = %1.3f" % dE )
     
-    DOS_CHEB         = np.zeros( ( len(EGRID), 3 ), dtype=np.complex128)
-    DOS_EXACT        = np.zeros( ( len(EGRID), 3 ), dtype=np.complex128)
+
     for Ei,Ept in enumerate(EGRID):
         print( "Working on grid point %d of %d" % (Ei, len(EGRID)) )
-        params = Params(    batch_size=5000, N_STOCHASTIC=5000, # (N_STOCHASTIC // batch_size) should be an integer
+        params = Params(    batch_size=100000, N_STOCHASTIC=100000, # (N_STOCHASTIC // batch_size) should be an integer
                             N_MOL=N_MOL,
-                            F_type="lorentzian", # "gaussian" or "1_over_e" or "lorentzian"
-                            N_CHEB=350, 
+                            F_type="1_over_e", # "gaussian" or "1_over_e" or "lorentzian"
+                            N_CHEB=N_CHEB,
+                            GAM=GAM,
                             dH=dH, 
                             WC=WC,
                             E0=E0,
                             A0=A0, 
                             Ept=Ept, 
-                            P_type="lorentzian", # "gaussian" or "lorentzian"
                             CAV_LOSS=CAV,
-                            CAV_LOSS_TYPE="stochastic" ) # "stochastic" or "non-hermitian"
+                            CAV_LOSS_TYPE="stochastic", # "stochastic" or "non-hermitian"
+                            P_type="lorentzian" ) # "gaussian" or "lorentzian"
         params.run()
-        DOS_CHEB[Ei]         = params.DOS
-        DOS_EXACT[Ei]        = params.DOS_EXACT
 
-    if ( params.F_type == "gaussian" ):
-        DOS_CHEB  = np.real( DOS_CHEB )
-        DOS_EXACT = np.real( DOS_EXACT )
-    elif ( params.F_type == "1_over_e" ):
-        DOS_CHEB  = -1 * np.imag( DOS_CHEB )
-        DOS_EXACT = -1 * np.imag( DOS_EXACT )
-    elif ( params.F_type == "lorentzian" ):
-        DOS_CHEB  = np.real( DOS_CHEB )
-        DOS_EXACT = np.real( DOS_EXACT )
-
+        if ( params.F_type == "gaussian" or params.F_type == "lorentzian" ):
+            DOS_CHEB[CAVi,Ei,:]  = np.real( params.DOS )
+        elif ( params.F_type == "1_over_e" ):
+            DOS_CHEB[CAVi,Ei,:]  = -1 * np.imag( params.DOS )
 
     # Normalize the DOS
-    TDOS          = np.sum( DOS_EXACT[:,0] ) * dE / (N_MOL + 1)
-    MDOS          = np.sum( DOS_EXACT[:,1] ) * dE / (N_MOL)
-    PDOS          = np.sum( DOS_EXACT[:,2] ) * dE
-    DOS_EXACT[:,0] = DOS_EXACT[:,0] / TDOS
-    DOS_EXACT[:,1] = DOS_EXACT[:,1] / MDOS
-    DOS_EXACT[:,2] = DOS_EXACT[:,2] / PDOS
+    TDOS          = np.sum( DOS_CHEB[CAVi,:,0] ) * dE / (N_MOL + 1)
+    MDOS          = np.sum( DOS_CHEB[CAVi,:,1] ) * dE / (N_MOL)
+    PDOS          = np.sum( DOS_CHEB[CAVi,:,2] ) * dE
+    DOS_CHEB[CAVi,:,0] = DOS_CHEB[CAVi,:,0] / TDOS
+    DOS_CHEB[CAVi,:,1] = DOS_CHEB[CAVi,:,1] / MDOS
+    DOS_CHEB[CAVi,:,2] = DOS_CHEB[CAVi,:,2] / PDOS
 
-    TDOS          = np.sum( DOS_CHEB[:,0] ) * dE / (N_MOL + 1)
-    MDOS          = np.sum( DOS_CHEB[:,1] ) * dE / (N_MOL)
-    PDOS          = np.sum( DOS_CHEB[:,2] ) * dE
-    DOS_CHEB[:,0] = DOS_CHEB[:,0] / TDOS
-    DOS_CHEB[:,1] = DOS_CHEB[:,1] / MDOS
-    DOS_CHEB[:,2] = DOS_CHEB[:,2] / PDOS
+    plt.plot( (EGRID-E0)/A0/np.sqrt(N_MOL), DOS_CHEB[CAVi,:,1], "-", lw=2, alpha=1, c=color_list[CAVi], label="$\\frac{\\Gamma}{A_0}$ = %1.3f" % (CAV/A0) )
+    plt.plot( (EGRID-E0)/A0/np.sqrt(N_MOL), DOS_CHEB[CAVi,:,2], "--", lw=2, alpha=1, c=color_list[CAVi] )
 
-    #plt.plot( EGRID, DOS_EXACT[:,1],          "-", lw=6, alpha=0.5, c="black" )
-    #plt.plot( EGRID, DOS_EXACT[:,2],          "-", lw=6, alpha=0.5, c="red" )
-    #plt.plot( EGRID, DOS_CHEB[:,1], "-", lw=2, c='black', label="$\\frac{\\gamma}{A_0}$ = %1.3f" % (CAV/A0) )
-    plt.plot( EGRID, DOS_CHEB[:,1], "-", lw=6, alpha=0.4, c=color_list[CAVi], label="$\\frac{\\gamma}{A_0}$ = %1.3f" % (CAV/A0) )
-    plt.plot( EGRID, DOS_CHEB[:,2], "-",lw=2, c=color_list[CAVi] )
-
-    plt.xlim(EMIN, EMAX)
+    plt.xlim(-2, 2)
     plt.title("$A_0$ = %1.2f a.u" % A0, fontsize=15)
-    plt.xlabel("Energy (a.u.)", fontsize=15)
-    plt.ylabel("Density of States", fontsize=15)
+    plt.xlabel("Energy, $\\frac{E}{A_0\\sqrt{N_\\mathrm{mol}}}$", fontsize=15)
+    plt.ylabel("Molecular Density of States", fontsize=15)
 
     plt.legend()
+    plt.tight_layout()
     plt.savefig( "DOS.png", dpi=300 )
+
+    np.savetxt( "%s/DOS_A0_%1.3f_WC_%1.3f_dH_%1.3f_NCHEB_%1.3f_GAM_%1.3f_CAVLOSS_%1.3f.dat" % (DATA_DIR, A0, WC, dH, N_CHEB, GAM, CAV), np.c_[(EGRID-E0)/A0/np.sqrt(N_MOL), DOS_CHEB[CAVi,:,0], DOS_CHEB[CAVi,:,1], DOS_CHEB[CAVi,:,2]], fmt="%1.4f", header="Energy, TDOS, MDOS, PDOS" )
